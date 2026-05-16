@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import PlainTextResponse
 from faster_whisper import WhisperModel
 from pydantic import BaseModel
 
@@ -83,15 +82,6 @@ async def transcribe(
         return run_transcription(temp_path, language)
     finally:
         temp_path.unlink(missing_ok=True)
-
-
-@app.post("/transcribe.txt", response_class=PlainTextResponse)
-async def transcribe_text(
-    file: Annotated[UploadFile, File(description="Audio file: wav, mp3, m4a, ogg, flac, webm, etc.")],
-    language: Annotated[str, Form(description="Language code or auto")] = DEFAULT_LANGUAGE,
-) -> str:
-    result = await transcribe(file=file, language=language)
-    return result.text
 
 
 def write_temp_audio(audio_bytes: bytes, suffix: str) -> Path:
