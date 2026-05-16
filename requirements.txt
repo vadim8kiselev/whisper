@@ -1,5 +1,4 @@
 faster-whisper>=1.1.1
-numpy>=1.26
-sounddevice>=0.5
-pynput>=1.7
-pyperclip>=1.9
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9

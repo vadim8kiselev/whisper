@@ -1,83 +1,103 @@
-# Local Whisper для Linux
+# Local Whisper Docker Service
 
-Локальная диктовка на `faster-whisper`: удерживаете `F13`, говорите на русском или английском, отпускаете клавишу, текст вставляется в активное поле через буфер обмена и `Ctrl+V`.
+HTTP-сервис транскрипции аудио на `faster-whisper` для Docker-сети `ai`.
 
-По умолчанию используется:
+Сервис принимает аудиофайл от других контейнеров и возвращает текст. Desktop-диктовки, хоткеев, микрофона и вставки текста здесь нет.
 
-- `large-v3-turbo`
-- `language auto`
-- `cuda`
-- `float16`
+По умолчанию:
 
-## Системные пакеты
+- модель: `large-v3-turbo`
+- устройство: `cpu`
+- вычисления: `int8`
+- язык: `auto`
+- адрес внутри сети `ai`: `http://local-whisper:8000`
 
-Ubuntu/Debian:
+## Запуск
 
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip portaudio19-dev xclip
-```
-
-Fedora:
+Создайте внешнюю сеть, если ее еще нет:
 
 ```bash
-sudo dnf install -y python3 python3-pip python3-devel portaudio-devel xclip
+docker network create ai
 ```
 
-Для Wayland часто нужен `wl-clipboard`, но глобальные хоткеи через `pynput` надежнее работают в X11-сессии. Если кнопка не ловится в Wayland, переключитесь на Xorg/X11 или назначьте в системе запуск внешней команды.
-
-## Установка
+Соберите и запустите сервис:
 
 ```bash
-chmod +x install.sh run_dictation.sh run_dictation_cpu.sh
-./install.sh
+docker compose up -d --build
 ```
 
-Первый запуск скачает модель в папку `models`. Установщик также ставит CUDA runtime wheels из `requirements-cuda.txt`, чтобы `faster-whisper` мог найти `cuBLAS`/`cuDNN` без ручной установки CUDA Toolkit.
+Первый запуск скачает модель в Docker volume `whisper-models`.
 
-## Запуск на GPU
+## API
+
+Проверка:
 
 ```bash
-./run_dictation.sh
+curl http://local-whisper:8000/health
 ```
 
-## Запуск на CPU
+Транскрипция JSON-ответом:
 
 ```bash
-./run_dictation_cpu.sh
+curl -s \
+  -F "file=@audio.wav" \
+  -F "language=auto" \
+  http://local-whisper:8000/transcribe
 ```
 
-CPU-режим использует `int8`, чтобы снизить нагрузку:
+Ответ:
+
+```json
+{
+  "text": "распознанный текст",
+  "language": "ru",
+  "duration": 12.34
+}
+```
+
+Только текст:
 
 ```bash
-python dictate_hold.py --device cpu --compute-type int8 --language auto
+curl -s \
+  -F "file=@audio.wav" \
+  http://local-whisper:8000/transcribe.txt
 ```
 
-## Автозапуск через systemd user
+## Вызов из другого контейнера
 
-Сервис в репозитории предполагает, что проект лежит в `~/Local Whisper`.
+Другой контейнер должен быть подключен к сети `ai`.
 
-```bash
-mkdir -p ~/.config/systemd/user
-cp local-whisper.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now local-whisper.service
+Пример в `docker-compose.yml` другого проекта:
+
+```yaml
+services:
+  app:
+    image: your-image
+    networks:
+      - ai
+
+networks:
+  ai:
+    external: true
 ```
 
-Проверка логов:
+После этого сервис доступен по DNS-имени:
 
-```bash
-journalctl --user -u local-whisper.service -f
+```text
+http://local-whisper:8000/transcribe
 ```
 
-Отключение:
+## Настройки
 
-```bash
-systemctl --user disable --now local-whisper.service
-```
+Переменные окружения в `docker-compose.yml`:
 
-## Хоткей
+- `WHISPER_MODEL=large-v3-turbo`
+- `WHISPER_DEVICE=cpu`
+- `WHISPER_COMPUTE_TYPE=int8`
+- `WHISPER_LANGUAGE=auto`
+- `WHISPER_MODEL_DIR=/models`
+- `WHISPER_BEAM_SIZE=5`
 
-Назначьте кнопку мыши или клавиатуры на `F13`. На Linux это можно сделать средствами вашей DE/WM, `input-remapper`, `keyd`, `xbindkeys` или настройками производителя, если они доступны.
+## Поддерживаемые форматы
 
-Логи приложения пишутся в `logs/dictate_hold.log`
+`faster-whisper` через PyAV обычно принимает `wav`, `mp3`, `m4a`, `ogg`, `flac`, `webm` и другие распространенные аудиоформаты.

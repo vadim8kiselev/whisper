@@ -1,0 +1,22 @@
+services:
+  local-whisper:
+    build: .
+    container_name: local-whisper
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: large-v3-turbo
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+      WHISPER_LANGUAGE: auto
+      WHISPER_MODEL_DIR: /models
+    volumes:
+      - whisper-models:/models
+    networks:
+      - ai
+
+volumes:
+  whisper-models:
+
+networks:
+  ai:
+    external: true
